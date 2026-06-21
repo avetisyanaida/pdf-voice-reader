@@ -37,21 +37,36 @@ type ProfileRow = {
     plan: "free" | "paid";
     subscription_status: string;
 };
+type PdfViewport = {
+    width: number;
+    height: number;
+};
+
+type PdfPage = {
+    getTextContent: () => Promise<{
+        items: unknown[];
+    }>;
+
+    getViewport: (options: { scale: number }) => PdfViewport;
+
+    render: (options: {
+        canvasContext: CanvasRenderingContext2D;
+        viewport: PdfViewport;
+    }) => {
+        promise: Promise<void>;
+    };
+};
 
 type PdfJsDocument = {
     numPages: number;
-    getPage: (pageNumber: number) => Promise<{
-        getTextContent: () => Promise<{
-            items: unknown[];
-        }>;
-    }>;
+    getPage: (pageNumber: number) => Promise<PdfPage>;
 };
 
 type PdfJsLib = {
-    version?: string;
     GlobalWorkerOptions: {
         workerSrc: string;
     };
+
     getDocument: (options: {
         data: ArrayBuffer;
         disableWorker?: boolean;
@@ -60,11 +75,38 @@ type PdfJsLib = {
     };
 };
 
+type TesseractProgress = {
+    status?: string;
+    progress?: number;
+};
+
+type TesseractWorker = {
+    recognize: (image: HTMLCanvasElement) => Promise<{
+        data: {
+            text: string;
+        };
+    }>;
+
+    terminate: () => Promise<void>;
+};
+
+type TesseractLib = {
+    createWorker: (
+        language?: string,
+        oem?: number,
+        options?: {
+            logger?: (message: TesseractProgress) => void;
+        }
+    ) => Promise<TesseractWorker>;
+};
+
 declare global {
     interface Window {
         pdfjsLib?: PdfJsLib;
+        Tesseract?: TesseractLib;
     }
 }
+
 
 const LANGUAGES: LanguageOption[] = [
     {label: "English", code: "en-US"},
@@ -94,6 +136,7 @@ export default function Home() {
     const [upgradePopupOpen, setUpgradePopupOpen] = useState(false);
     const [paddle, setPaddle] = useState<Paddle | null>(null);
     const [checkoutLoading, setCheckoutLoading] = useState(false);
+    const [ocrProgress, setOcrProgress] = useState("");
 
     const textRef = useRef("");
     const cursorRef = useRef(0);
@@ -513,65 +556,137 @@ export default function Home() {
             .trim();
     }
 
-
-    function loadPdfJsFromCdn(): Promise<PdfJsLib> {
+    function loadExternalScript(src: string, marker: string): Promise<void> {
         return new Promise((resolve, reject) => {
-            if (window.pdfjsLib) {
-                window.pdfjsLib.GlobalWorkerOptions.workerSrc =
-                    "https://unpkg.com/pdfjs-dist@3.11.174/legacy/build/pdf.worker.min.js";
-
-                resolve(window.pdfjsLib);
-                return;
-            }
-
             const existingScript = document.querySelector<HTMLScriptElement>(
-                'script[data-pdfjs="true"]'
+                `script[data-loader="${marker}"]`
             );
 
             if (existingScript) {
-                existingScript.addEventListener("load", () => {
-                    if (!window.pdfjsLib) {
-                        reject(new Error("PDF.js loaded but pdfjsLib was not found."));
-                        return;
-                    }
+                if (existingScript.dataset.loaded === "true") {
+                    resolve();
+                    return;
+                }
 
-                    window.pdfjsLib.GlobalWorkerOptions.workerSrc =
-                        "https://unpkg.com/pdfjs-dist@3.11.174/legacy/build/pdf.worker.min.js";
-
-                    resolve(window.pdfjsLib);
-                });
-
-                existingScript.addEventListener("error", () => {
-                    reject(new Error("Could not load PDF.js."));
-                });
+                existingScript.addEventListener("load", () => resolve());
+                existingScript.addEventListener("error", () =>
+                    reject(new Error(`Could not load ${marker}.`))
+                );
 
                 return;
             }
 
             const script = document.createElement("script");
-            script.src =
-                "https://unpkg.com/pdfjs-dist@3.11.174/legacy/build/pdf.min.js";
+            script.src = src;
             script.async = true;
-            script.dataset.pdfjs = "true";
+            script.dataset.loader = marker;
 
             script.onload = () => {
-                if (!window.pdfjsLib) {
-                    reject(new Error("PDF.js loaded but pdfjsLib was not found."));
-                    return;
-                }
-
-                window.pdfjsLib.GlobalWorkerOptions.workerSrc =
-                    "https://unpkg.com/pdfjs-dist@3.11.174/legacy/build/pdf.worker.min.js";
-
-                resolve(window.pdfjsLib);
+                script.dataset.loaded = "true";
+                resolve();
             };
 
             script.onerror = () => {
-                reject(new Error("Could not load PDF.js."));
+                reject(new Error(`Could not load ${marker}.`));
             };
 
             document.body.appendChild(script);
         });
+    }
+
+    async function loadPdfJsFromCdn(): Promise<PdfJsLib> {
+        await loadExternalScript(
+            "https://unpkg.com/pdfjs-dist@3.11.174/legacy/build/pdf.min.js",
+            "pdfjs"
+        );
+
+        if (!window.pdfjsLib) {
+            throw new Error("PDF.js loaded but pdfjsLib was not found.");
+        }
+
+        window.pdfjsLib.GlobalWorkerOptions.workerSrc =
+            "https://unpkg.com/pdfjs-dist@3.11.174/legacy/build/pdf.worker.min.js";
+
+        return window.pdfjsLib;
+    }
+    async function loadTesseractFromCdn(): Promise<TesseractLib> {
+        await loadExternalScript(
+            "https://cdn.jsdelivr.net/npm/tesseract.js@5/dist/tesseract.min.js",
+            "tesseract"
+        );
+
+        if (!window.Tesseract) {
+            throw new Error("Tesseract loaded but Tesseract was not found.");
+        }
+
+        return window.Tesseract;
+    }
+
+    async function renderPdfPageToCanvas(page: PdfPage) {
+        const viewport = page.getViewport({ scale: 1.7 });
+
+        const canvas = document.createElement("canvas");
+        const context = canvas.getContext("2d");
+
+        if (!context) {
+            throw new Error("Could not create canvas context.");
+        }
+
+        canvas.width = Math.floor(viewport.width);
+        canvas.height = Math.floor(viewport.height);
+
+        await page.render({
+            canvasContext: context,
+            viewport,
+        }).promise;
+
+        return canvas;
+    }
+
+    async function extractTextWithOcr(pdf: PdfJsDocument) {
+        const tesseract = await loadTesseractFromCdn();
+
+        const ocrLanguage = language.toLowerCase().startsWith("ru")
+            ? "rus+eng"
+            : "eng";
+
+        setOcrProgress("OCR: preparing...");
+
+        const worker = await tesseract.createWorker(ocrLanguage, 1, {
+            logger: (message) => {
+                if (!message.status) return;
+
+                const percent =
+                    typeof message.progress === "number"
+                        ? ` ${Math.round(message.progress * 100)}%`
+                        : "";
+
+                setOcrProgress(`OCR: ${message.status}${percent}`);
+            },
+        });
+
+        let ocrText = "";
+
+        try {
+            for (let pageNumber = 1; pageNumber <= pdf.numPages; pageNumber++) {
+                setOcrProgress(`OCR: page ${pageNumber} / ${pdf.numPages}`);
+
+                const page = await pdf.getPage(pageNumber);
+                const canvas = await renderPdfPageToCanvas(page);
+
+                const result = await worker.recognize(canvas);
+
+                ocrText += `\n\n--- Page ${pageNumber} OCR ---\n\n${result.data.text}`;
+
+                canvas.width = 0;
+                canvas.height = 0;
+            }
+        } finally {
+            await worker.terminate();
+            setOcrProgress("");
+        }
+
+        return ocrText;
     }
 
     async function handlePdfUpload(event: ChangeEvent<HTMLInputElement>) {
@@ -645,20 +760,28 @@ export default function Home() {
                 extractedText += `\n\n--- Page ${pageNumber} ---\n\n${pageText}`;
             }
 
-            const cleanText = cleanPdfText(extractedText);
+            let finalText = cleanPdfText(extractedText);
 
-            if (!cleanText) {
+            if (!finalText || finalText.length < 30) {
+                setCloudMessage("Scanned PDF detected. Running OCR...");
+                setError("");
+
+                const ocrText = await extractTextWithOcr(pdf);
+                finalText = cleanPdfText(ocrText);
+            }
+
+            if (!finalText) {
                 setStatus("error");
                 setError(
-                    "No selectable text found in this PDF. It may be a scanned image PDF."
+                    "Could not extract text from this PDF. The scan quality may be too low."
                 );
                 return;
             }
 
-            setText(cleanText);
-            textRef.current = cleanText;
+            setText(finalText);
+            textRef.current = finalText;
             setStatus("ready");
-            await saveNewDocumentToAccount(file.name, cleanText);
+            await saveNewDocumentToAccount(file.name, finalText);
         } catch (err) {
             console.error("PDF read error:", err);
 
@@ -1105,6 +1228,7 @@ export default function Home() {
                         {text.length.toLocaleString()}
             </span>
                     {cloudSaving && <span>Saving...</span>}
+                    {ocrProgress && <span>{ocrProgress}</span>}
                     {cloudMessage && <span>{cloudMessage}</span>}
                 </div>
 
