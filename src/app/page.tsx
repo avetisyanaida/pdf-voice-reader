@@ -286,8 +286,13 @@ export default function Home() {
             .maybeSingle();
 
         if (error) {
-            console.error("Supabase save error:", error);
-            setCloudMessage(error.message);
+            console.error("Supabase update error full:", JSON.stringify(error, null, 2));
+            console.error("Supabase update error raw:", error);
+
+            setCloudMessage(
+                error.message || "Could not save document changes."
+            );
+
             return;
         }
 
@@ -351,6 +356,11 @@ export default function Home() {
     }
 
     async function openPaddleCheckout() {
+        console.log("Upgrade clicked");
+        console.log("Current user:", user?.email);
+        console.log("Paddle instance:", paddle);
+        console.log("Paddle price ID:", process.env.NEXT_PUBLIC_PADDLE_PRICE_ID);
+
         if (!user) {
             setCloudMessage("Login required before upgrading.");
             return;
@@ -391,7 +401,7 @@ export default function Home() {
                 },
             });
         } catch (err) {
-            console.error(err);
+            console.error("Paddle checkout open error:", err);
             setCloudMessage("Could not open payment checkout.");
         } finally {
             setCheckoutLoading(false);
