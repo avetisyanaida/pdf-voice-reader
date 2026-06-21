@@ -518,10 +518,10 @@ export default function Home() {
         cursorRef.current = 0;
 
         try {
-            const pdfjsLib = await import("pdfjs-dist");
+            const pdfjsLib = await import("pdfjs-dist/legacy/build/pdf.mjs");
 
             pdfjsLib.GlobalWorkerOptions.workerSrc =
-                `https://unpkg.com/pdfjs-dist@${pdfjsLib.version}/build/pdf.worker.min.mjs`;
+                `https://unpkg.com/pdfjs-dist@${pdfjsLib.version}/legacy/build/pdf.worker.min.mjs`;
 
             const arrayBuffer = await file.arrayBuffer();
 
