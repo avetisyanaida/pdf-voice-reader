@@ -327,7 +327,11 @@ export default function Home() {
 
     if (!file) return;
 
-    if (file.type !== "application/pdf") {
+    const isPdf =
+        file.type === "application/pdf" ||
+        file.name.toLowerCase().endsWith(".pdf");
+
+    if (!isPdf) {
       setStatus("error");
       setError("Please upload a PDF file.");
       return;
@@ -704,7 +708,7 @@ export default function Home() {
           <label className="uploadBox">
             <input
                 type="file"
-                accept="application/pdf"
+                accept=".pdf,application/pdf"
                 onChange={handlePdfUpload}
             />
 

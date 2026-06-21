@@ -79,8 +79,17 @@ h1 {
   cursor: pointer;
 }
 
+.uploadBox {
+  position: relative;
+}
+
 .uploadBox input {
-  display: none;
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  opacity: 0;
+  cursor: pointer;
 }
 
 .uploadTitle {
@@ -396,4 +405,61 @@ textarea::placeholder {
   top: 12px;
   z-index: 20;
   backdrop-filter: blur(14px);
+}
+
+
+@media (max-width: 640px) {
+  .page {
+    width: 100%;
+    padding: 18px 12px;
+  }
+
+  h1 {
+    font-size: 34px;
+    line-height: 1;
+  }
+
+  .subtitle {
+    font-size: 15px;
+  }
+
+  .topBar {
+    justify-content: flex-start;
+    overflow-x: auto;
+    padding-bottom: 8px;
+  }
+
+  .authPanel {
+    min-width: 520px;
+    width: 520px;
+  }
+
+  .card {
+    overflow-x: auto;
+  }
+
+  .controlsGrid {
+    grid-template-columns: 220px 360px 260px;
+    min-width: 900px;
+  }
+
+  .buttons {
+    flex-wrap: nowrap;
+    min-width: max-content;
+    overflow-x: auto;
+    padding-bottom: 6px;
+  }
+
+  .buttons button {
+    flex: 0 0 auto;
+  }
+
+  .previewCard {
+    overflow-x: auto;
+  }
+
+  .readerText,
+  .editTextArea {
+    min-width: 760px;
+  }
 }
