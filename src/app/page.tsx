@@ -1069,6 +1069,7 @@ export default function Home() {
             </section>
 
             <footer className="siteFooter">
+                <a href="/pricing">Pricing</a>
                 <a href="/terms">Terms</a>
                 <a href="/privacy">Privacy</a>
                 <a href="/refund">Refund</a>
