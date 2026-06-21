@@ -62,6 +62,7 @@ export default function Home() {
     const [selectedDocumentId, setSelectedDocumentId] = useState<string | null>(null);
     const [cloudSaving, setCloudSaving] = useState(false);
     const [cloudMessage, setCloudMessage] = useState("");
+    const [upgradePopupOpen, setUpgradePopupOpen] = useState(false);
 
     const textRef = useRef("");
     const cursorRef = useRef(0);
@@ -306,18 +307,31 @@ export default function Home() {
         setCloudMessage("Loaded from account.");
     }
 
+    function isPaidUser() {
+        return (
+            profile?.plan === "paid" &&
+            profile?.subscription_status === "active"
+        );
+    }
+
+    function canUploadNewPdf() {
+        if (!user) {
+            setCloudMessage("Login required to save PDF.");
+            return false;
+        }
+
+        if (!isPaidUser() && documentCount >= 1) {
+            setCloudMessage("Free plan allows only 1 saved PDF. Upgrade to save more.");
+            setUpgradePopupOpen(true);
+            return false;
+        }
+
+        return true;
+    }
+
     async function saveNewDocumentToAccount(fileNameValue: string, contentValue: string) {
         if (!user) {
             setCloudMessage("Login required to save PDF.");
-            return;
-        }
-
-        const isPaidUser =
-            profile?.plan === "paid" &&
-            profile?.subscription_status === "active";
-
-        if (!isPaidUser && documentCount >= 1) {
-            setCloudMessage("Free plan allows only 1 saved PDF. Upgrade to save more.");
             return;
         }
 
@@ -402,6 +416,8 @@ export default function Home() {
 
         if (!file) return;
 
+        event.target.value = "";
+
         const isPdf =
             file.type === "application/pdf" ||
             file.name.toLowerCase().endsWith(".pdf");
@@ -412,7 +428,12 @@ export default function Home() {
             return;
         }
 
+        if (!canUploadNewPdf()) {
+            return;
+        }
+
         stopReading();
+        setSelectedDocumentId(null);
 
         setFileName(file.name);
         setText("");
@@ -972,6 +993,54 @@ export default function Home() {
                     </div>
                 )}
             </section>
+
+            {upgradePopupOpen && (
+                <div className="modalOverlay" onClick={() => setUpgradePopupOpen(false)}>
+                    <div className="upgradeModal" onClick={(e) => e.stopPropagation()}>
+                        <div className="modalBadge">Free limit reached</div>
+
+                        <h3>Upgrade to Pro</h3>
+
+                        <p>
+                            Free plan allows only 1 saved PDF. Upgrade to Pro to save more
+                            PDFs and keep your reading history.
+                        </p>
+
+                        <div className="planCompare">
+                            <div>
+                                <strong>Free</strong>
+                                <span>1 saved PDF</span>
+                                <span>Basic reader</span>
+                            </div>
+
+                            <div className="proPlan">
+                                <strong>Pro</strong>
+                                <span>Unlimited PDFs</span>
+                                <span>Cloud history</span>
+                                <span>Continue reading</span>
+                            </div>
+                        </div>
+
+                        <div className="modalActions">
+                            <button
+                                className="secondaryButton"
+                                onClick={() => setUpgradePopupOpen(false)}
+                            >
+                                Not now
+                            </button>
+
+                            <button
+                                onClick={() => {
+                                    setUpgradePopupOpen(false);
+                                    setCloudMessage("Payment checkout will be added next.");
+                                }}
+                            >
+                                Upgrade to Pro
+                            </button>
+                        </div>
+                    </div>
+                </div>
+            )}
         </main>
     );
 }
