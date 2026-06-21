@@ -305,6 +305,23 @@ export default function Home() {
     setCloudMessage("Saved.");
   }
 
+  function cleanPdfText(input: string) {
+    return input
+        // line-break hyphenation: коли - чество -> количество
+        .replace(/([A-Za-zА-Яа-яЁё])\s*-\s+([A-Za-zА-Яа-яЁё])/g, "$1$2")
+
+        // extra spaces before punctuation
+        .replace(/\s+([,.!?;:])/g, "$1")
+
+        // normalize many spaces
+        .replace(/[ \t]+/g, " ")
+
+        // normalize too many new lines
+        .replace(/\n{3,}/g, "\n\n")
+
+        .trim();
+  }
+
   async function handlePdfUpload(event: ChangeEvent<HTMLInputElement>) {
     const file = event.target.files?.[0];
 
@@ -369,7 +386,7 @@ export default function Home() {
         extractedText += `\n\n--- Page ${pageNumber} ---\n\n${pageText}`;
       }
 
-      const cleanText = extractedText.trim();
+      const cleanText = cleanPdfText(extractedText);
 
       if (!cleanText) {
         setStatus("error");
@@ -415,6 +432,12 @@ export default function Home() {
 
     if (lastSentenceEnd > 60) {
       end = start + lastSentenceEnd + 1;
+    } else if (end < fullText.length) {
+      const lastSpace = slice.lastIndexOf(" ");
+
+      if (lastSpace > 60) {
+        end = start + lastSpace + 1;
+      }
     }
 
     const rawChunk = fullText.slice(start, end);
@@ -428,7 +451,6 @@ export default function Home() {
       nextStart: end,
     };
   }
-
   function speakFrom(position: number) {
     const fullText = textRef.current;
 
