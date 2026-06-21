@@ -356,11 +356,6 @@ export default function Home() {
     }
 
     async function openPaddleCheckout() {
-        console.log("Upgrade clicked");
-        console.log("Current user:", user?.email);
-        console.log("Paddle instance:", paddle);
-        console.log("Paddle price ID:", process.env.NEXT_PUBLIC_PADDLE_PRICE_ID);
-
         if (!user) {
             setCloudMessage("Login required before upgrading.");
             return;
