@@ -5,6 +5,7 @@ import {User} from "@supabase/supabase-js";
 import "./globals.css";
 import {supabase} from "../../lib/supabaseClient";
 import {AuthCard} from "../../components/AuthCard";
+import {initializePaddle, Paddle} from "@paddle/paddle-js";
 
 type ReaderStatus =
     | "idle"
@@ -63,6 +64,8 @@ export default function Home() {
     const [cloudSaving, setCloudSaving] = useState(false);
     const [cloudMessage, setCloudMessage] = useState("");
     const [upgradePopupOpen, setUpgradePopupOpen] = useState(false);
+    const [paddle, setPaddle] = useState<Paddle | null>(null);
+    const [checkoutLoading, setCheckoutLoading] = useState(false);
 
     const textRef = useRef("");
     const cursorRef = useRef(0);
@@ -73,6 +76,24 @@ export default function Home() {
     const rateRef = useRef(1);
     const activeTextRef = useRef<HTMLSpanElement | null>(null);
     const readerTextRef = useRef<HTMLDivElement | null>(null);
+
+    useEffect(() => {
+        const token = process.env.NEXT_PUBLIC_PADDLE_CLIENT_TOKEN;
+
+        if (!token) {
+            console.warn("Missing NEXT_PUBLIC_PADDLE_CLIENT_TOKEN");
+            return;
+        }
+
+        initializePaddle({
+            token,
+            environment: "sandbox",
+        }).then((paddleInstance) => {
+            if (paddleInstance) {
+                setPaddle(paddleInstance);
+            }
+        });
+    }, []);
 
     useEffect(() => {
         if (!user) return;
@@ -327,6 +348,54 @@ export default function Home() {
         }
 
         return true;
+    }
+
+    async function openPaddleCheckout() {
+        if (!user) {
+            setCloudMessage("Login required before upgrading.");
+            return;
+        }
+
+        const priceId = process.env.NEXT_PUBLIC_PADDLE_PRICE_ID;
+
+        if (!priceId) {
+            setCloudMessage("Missing Paddle price ID.");
+            return;
+        }
+
+        if (!paddle) {
+            setCloudMessage("Payment checkout is still loading. Try again.");
+            return;
+        }
+
+        setCheckoutLoading(true);
+
+        try {
+            paddle.Checkout.open({
+                items: [
+                    {
+                        priceId,
+                        quantity: 1,
+                    },
+                ],
+                customer: {
+                    email: user.email || "",
+                },
+                customData: {
+                    user_id: user.id,
+                    email: user.email || "",
+                },
+                settings: {
+                    theme: "dark",
+                    displayMode: "overlay",
+                },
+            });
+        } catch (err) {
+            console.error(err);
+            setCloudMessage("Could not open payment checkout.");
+        } finally {
+            setCheckoutLoading(false);
+        }
     }
 
     async function saveNewDocumentToAccount(fileNameValue: string, contentValue: string) {
@@ -1030,12 +1099,12 @@ export default function Home() {
                             </button>
 
                             <button
+                                disabled={checkoutLoading}
                                 onClick={() => {
-                                    setUpgradePopupOpen(false);
-                                    setCloudMessage("Payment checkout will be added next.");
+                                    void openPaddleCheckout();
                                 }}
                             >
-                                Upgrade to Pro
+                                {checkoutLoading ? "Opening..." : "Upgrade to Pro"}
                             </button>
                         </div>
                     </div>
