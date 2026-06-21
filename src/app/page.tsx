@@ -520,10 +520,8 @@ export default function Home() {
         try {
             const pdfjsLib = await import("pdfjs-dist");
 
-            pdfjsLib.GlobalWorkerOptions.workerSrc = new URL(
-                "pdfjs-dist/build/pdf.worker.min.mjs",
-                import.meta.url
-            ).toString();
+            pdfjsLib.GlobalWorkerOptions.workerSrc =
+                `https://unpkg.com/pdfjs-dist@${pdfjsLib.version}/build/pdf.worker.min.mjs`;
 
             const arrayBuffer = await file.arrayBuffer();
 
@@ -575,9 +573,15 @@ export default function Home() {
             setStatus("ready");
             await saveNewDocumentToAccount(file.name, cleanText);
         } catch (err) {
-            console.error(err);
+            console.error("PDF read error:", err);
+
+            const message =
+                err instanceof Error
+                    ? err.message
+                    : "Unknown PDF processing error";
+
             setStatus("error");
-            setError("Could not read this PDF. Try another PDF file.");
+            setError(`Could not read this PDF on this device. ${message}`);
         }
     }
 
