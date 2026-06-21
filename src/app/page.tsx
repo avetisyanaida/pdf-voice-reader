@@ -38,6 +38,34 @@ type ProfileRow = {
     subscription_status: string;
 };
 
+type PdfJsDocument = {
+    numPages: number;
+    getPage: (pageNumber: number) => Promise<{
+        getTextContent: () => Promise<{
+            items: unknown[];
+        }>;
+    }>;
+};
+
+type PdfJsLib = {
+    version?: string;
+    GlobalWorkerOptions: {
+        workerSrc: string;
+    };
+    getDocument: (options: {
+        data: ArrayBuffer;
+        disableWorker?: boolean;
+    }) => {
+        promise: Promise<PdfJsDocument>;
+    };
+};
+
+declare global {
+    interface Window {
+        pdfjsLib?: PdfJsLib;
+    }
+}
+
 const LANGUAGES: LanguageOption[] = [
     {label: "English", code: "en-US"},
     {label: "Russian", code: "ru-RU"},
@@ -485,6 +513,67 @@ export default function Home() {
             .trim();
     }
 
+
+    function loadPdfJsFromCdn(): Promise<PdfJsLib> {
+        return new Promise((resolve, reject) => {
+            if (window.pdfjsLib) {
+                window.pdfjsLib.GlobalWorkerOptions.workerSrc =
+                    "https://unpkg.com/pdfjs-dist@3.11.174/legacy/build/pdf.worker.min.js";
+
+                resolve(window.pdfjsLib);
+                return;
+            }
+
+            const existingScript = document.querySelector<HTMLScriptElement>(
+                'script[data-pdfjs="true"]'
+            );
+
+            if (existingScript) {
+                existingScript.addEventListener("load", () => {
+                    if (!window.pdfjsLib) {
+                        reject(new Error("PDF.js loaded but pdfjsLib was not found."));
+                        return;
+                    }
+
+                    window.pdfjsLib.GlobalWorkerOptions.workerSrc =
+                        "https://unpkg.com/pdfjs-dist@3.11.174/legacy/build/pdf.worker.min.js";
+
+                    resolve(window.pdfjsLib);
+                });
+
+                existingScript.addEventListener("error", () => {
+                    reject(new Error("Could not load PDF.js."));
+                });
+
+                return;
+            }
+
+            const script = document.createElement("script");
+            script.src =
+                "https://unpkg.com/pdfjs-dist@3.11.174/legacy/build/pdf.min.js";
+            script.async = true;
+            script.dataset.pdfjs = "true";
+
+            script.onload = () => {
+                if (!window.pdfjsLib) {
+                    reject(new Error("PDF.js loaded but pdfjsLib was not found."));
+                    return;
+                }
+
+                window.pdfjsLib.GlobalWorkerOptions.workerSrc =
+                    "https://unpkg.com/pdfjs-dist@3.11.174/legacy/build/pdf.worker.min.js";
+
+                resolve(window.pdfjsLib);
+            };
+
+            script.onerror = () => {
+                reject(new Error("Could not load PDF.js."));
+            };
+
+            document.body.appendChild(script);
+        });
+    }
+
     async function handlePdfUpload(event: ChangeEvent<HTMLInputElement>) {
         const file = event.target.files?.[0];
 
@@ -518,15 +607,13 @@ export default function Home() {
         cursorRef.current = 0;
 
         try {
-            const pdfjsLib = await import("pdfjs-dist/legacy/build/pdf.mjs");
-
-            pdfjsLib.GlobalWorkerOptions.workerSrc =
-                `https://unpkg.com/pdfjs-dist@${pdfjsLib.version}/legacy/build/pdf.worker.min.mjs`;
+            const pdfjsLib = await loadPdfJsFromCdn();
 
             const arrayBuffer = await file.arrayBuffer();
 
             const pdf = await pdfjsLib.getDocument({
                 data: arrayBuffer,
+                disableWorker: true,
             }).promise;
 
             let extractedText = "";
