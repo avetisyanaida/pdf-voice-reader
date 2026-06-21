@@ -35,7 +35,7 @@ const LANGUAGES: LanguageOption[] = [
   { label: "Russian", code: "ru-RU" },
 ];
 
-const CHUNK_SIZE = 180;
+const CHUNK_SIZE = 900;
 
 export default function Home() {
   const [user, setUser] = useState<User | null>(null);
@@ -422,21 +422,22 @@ export default function Home() {
 
     const slice = fullText.slice(start, end);
 
-    const lastSentenceEnd = Math.max(
-        slice.lastIndexOf("."),
-        slice.lastIndexOf("!"),
-        slice.lastIndexOf("?"),
-        slice.lastIndexOf("։"),
-        slice.lastIndexOf("\n")
-    );
+    const sentenceMarks = [".", "!", "?", "։", "\n"];
+    let lastSentenceEnd = -1;
 
-    if (lastSentenceEnd > 60) {
-      end = start + lastSentenceEnd + 1;
-    } else if (end < fullText.length) {
-      const lastSpace = slice.lastIndexOf(" ");
+    for (const mark of sentenceMarks) {
+      lastSentenceEnd = Math.max(lastSentenceEnd, slice.lastIndexOf(mark));
+    }
 
-      if (lastSpace > 60) {
-        end = start + lastSpace + 1;
+    if (end < fullText.length) {
+      if (lastSentenceEnd > CHUNK_SIZE * 0.55) {
+        end = start + lastSentenceEnd + 1;
+      } else {
+        const lastSpace = slice.lastIndexOf(" ");
+
+        if (lastSpace > CHUNK_SIZE * 0.55) {
+          end = start + lastSpace + 1;
+        }
       }
     }
 
@@ -451,6 +452,7 @@ export default function Home() {
       nextStart: end,
     };
   }
+
   function speakFrom(position: number) {
     const fullText = textRef.current;
 
@@ -520,7 +522,7 @@ export default function Home() {
 
       window.setTimeout(() => {
         speakFrom(result.nextStart);
-      }, 120);
+      }, 20);
     };
 
     utterance.onerror = (event) => {
