@@ -6,10 +6,10 @@ import {supabase} from "../lib/supabaseClient";
 
 type AuthCardProps = {
     user: User | null;
-    onSignOutDone: () => void;
+    onSignOutDoneAction: () => void;
 };
 
-export function AuthCard({ user, onSignOutDone }: AuthCardProps) {
+export function AuthCard({ user, onSignOutDoneAction }: AuthCardProps) {
     const [authMode, setAuthMode] = useState<"login" | "register">("login");
     const [email, setEmail] = useState("");
     const [password, setPassword] = useState("");
@@ -63,7 +63,7 @@ export function AuthCard({ user, onSignOutDone }: AuthCardProps) {
 
     async function handleSignOut() {
         await supabase.auth.signOut();
-        onSignOutDone();
+        onSignOutDoneAction();
     }
 
     return (
