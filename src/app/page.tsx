@@ -762,9 +762,16 @@ export default function Home() {
 
             let finalText = cleanPdfText(extractedText);
 
-            if (!finalText || finalText.length < 30) {
-                setCloudMessage("Scanned PDF detected. Running OCR...");
+            const realExtractedText = cleanPdfText(
+                extractedText.replace(/--- Page \d+ ---/g, "")
+            );
+
+            if (!realExtractedText || realExtractedText.length < 30) {
+                setCloudMessage(
+                    "Scanned PDF detected. Running OCR. This may take a few minutes..."
+                );
                 setError("");
+                setStatus("loading");
 
                 const ocrText = await extractTextWithOcr(pdf);
                 finalText = cleanPdfText(ocrText);
